@@ -1,0 +1,342 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Snappy Media Manager
+
+Parameters:
+  CodeDeployBucketName:
+    Type: String
+    Description: The bucket name for code artifacts to deploy
+    Default: '' # TODO: Temporary - REMOVE  ME
+
+  ProcessorDeployKey:
+    Type: String
+    Description: The artifact key for the image processor lambda
+    Default: '' # TODO: Temporary - REMOVE  ME
+
+  ApiDeployKey:
+    Type: String
+    Description: The artifact key for the API lambda
+    Default: '' # TODO: Temporary - REMOVE  ME
+
+  LogRetentionDays:
+    Type: Number
+    Description: The number of days to retain logs. Defaults to 14.
+    Default: 14
+
+  # TODO: Cognito User Pool params
+  # TODO: Website/frontend params
+
+Outputs:
+  UploadBucketName:
+    Value: !Ref UploadBucket
+
+  StorageBucketName:
+    Value: !Ref StorageBucket
+
+  AlbumTableName:
+    Value: !Ref AlbumTable
+
+  PhotoTableName:
+    Value: !Ref PhotoTable
+
+  # TODO: API/Cloudfront URLs
+  # TODO: Congito
+
+Resources:
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      Tags:
+        - Key: Platform
+          Value: Snappy
+        - Key: Purpose
+          Value: Temporary storage for uploads
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Queue: !GetAtt NewImageQueue.Arn
+
+  StorageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      Tags:
+        - Key: Platform
+          Value: Snappy
+        - Key: Purpose
+          Value: Media storage
+
+  # TODO: Use pre-signed URLs?
+  StorageBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StorageBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - s3:GetObject
+            Resource: !Sub 'arn:${AWS::Partition}:s3:::${StorageBucket}/*'
+
+  AlbumTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: Slug
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Slug
+          KeyType: HASH
+      Tags:
+        - Key: Platform
+          Value: Snappy
+        - Key: Purpose
+          Value: Data storage
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - I3011
+
+  PhotoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: Id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Id
+          KeyType: HASH
+      Tags:
+        - Key: Platform
+          Value: Snappy
+        - Key: Purpose
+          Value: Data storage
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - I3011
+
+  NewImageQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 300 # 5 minutes
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - I3011
+            - I3013
+
+  NewImageQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref NewImageQueue
+      PolicyDocument:
+        Version: 2012-10-17
+        Id: S3Publish
+        Statement:
+          - Sid: S3PublishMessage
+            Effect: Allow
+            Principal:
+              Service: 's3.amazonaws.com'
+            Action:
+              - 'SQS:SendMessage'
+            Resource: !Sub ${NewImageQueue.Arn}
+            Condition:
+              ArnLike:
+                'aws:SourceArn': !Sub '${UploadBucket.Arn}'
+
+  NewImageWorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: sqs_rx
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'sqs:DeleteMessage*'
+                  - 'sqs:GetQueueAttributes'
+                  - 'sqs:GetQueueUrl'
+                  - 'sqs:ListDeadLetterSourceQueues'
+                  - 'sqs:ReceiveMessage'
+                Resource: !Sub ${NewImageQueue.Arn}
+
+              - Effect: Allow
+                Action:
+                  - 'sqs:ListQueues'
+                Resource: !Sub 'arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:*'
+
+        - PolicyName: logs
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource: arn:aws:logs:*:*:* # TODO restrict
+
+        - PolicyName: s3_fetch
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket*
+                Resource: !Sub ${UploadBucket.Arn}
+
+              - Effect: Allow
+                Action:
+                  - s3:DeleteObject*
+                  - s3:GetObject*
+                Resource: !Sub ${UploadBucket.Arn}*
+
+              - Effect: Allow
+                Action:
+                  - s3:PutObject*
+                Resource: !Sub ${StorageBucket.Arn}*
+
+        - PolicyName: dynamo
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:Batch*'
+                  - 'dynamodb:DeleteItem'
+                  - 'dynamodb:DescribeTable' # Not sure about this?
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:UpdateTable' # Not sure about this?
+                Resource:
+                  - !Sub ${AlbumTable.Arn}
+                  - !Sub ${PhotoTable.Arn}
+
+        - PolicyName: thumbnail_topic
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref ThumbnailWorkerTopic
+
+  ImageProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ImageProcessor}'
+      RetentionInDays: !Ref LogRetentionDays
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - I3011
+
+  ImageProcessor:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeDeployBucketName
+        Key: !Ref ProcessorDeployKey
+      Handler: Snappy.ImageProcessor::Snappy.ImageProcessor.NewImageHandler::FunctionHandler
+      Role: !Sub ${NewImageWorkerRole.Arn}
+      Runtime: dotnet6
+      MemorySize: 256
+      Timeout: 300
+      Environment:
+        Variables:
+          StorageBucketName: !Ref StorageBucket
+          NewImageQueueUrl: !Ref NewImageQueue
+          ThumbnailWorkerTopicArn: !Ref ThumbnailWorkerTopic
+          AlbumTableName: !Ref AlbumTable
+          PhotoTableName: !Ref PhotoTable
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt NewImageQueue.Arn
+            BatchSize: 1 # 10
+
+  ThumbnailWorkerTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: ThumbnailGenerator
+      # Subscription:
+      #   - Endpoint: !GetAtt ThumbnailWorker.Arn
+      #     Protocol: lambda
+
+  ThumbnailWorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: logs
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource: arn:aws:logs:*:*:* # TODO: Restrict logs
+
+        - PolicyName: s3
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket*
+                Resource: !GetAtt StorageBucket.Arn
+
+              - Effect: Allow
+                Action:
+                  - s3:GetObject*
+                  - s3:PutObject*
+                Resource: !Sub ${StorageBucket.Arn}/*
+
+  # ThumbnailWorker:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri:
+  #       Bucket: !Ref CodeDeployBucketName
+  #       Key: !Ref ProcessorDeployKey
+  #     Handler: Snappy.ImageProcessor::Snappy.ImageProcessor.ResizeImageHandler::FunctionHandler
+  #     Role: !GetAtt ThumbnailWorkerRole.Arn
+  #     Runtime: dotnetcore3.1
+  #     MemorySize: 512
+  #     Timeout: 300
+  #     Environment: {}
+  #     Events:
+  #       SNSEvent:
+  #         Type: SNS
+  #         Properties:
+  #           Topic: !Ref ThumbnailWorkerTopic
+
+  # ThumbnailWorkerLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub '/aws/lambda/${ThumbnailWorker}'
+  #     RetentionInDays: !Ref LogRetentionDays
+  #   Metadata:
+  #     cfn-lint:
+  #       config:
+  #         ignore_checks:
+  #           - I3011

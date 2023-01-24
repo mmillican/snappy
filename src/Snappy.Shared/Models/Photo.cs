@@ -7,7 +7,7 @@ public class Photo
 	public string AlbumSlug { get; set; }
 
 	public string FileName { get; set; }
-	public string SavedFiledName { get; set; }
+	public string SavedFileName { get; set; }
 
 	public string Title { get; set; }
 	public string Description { get; set; }

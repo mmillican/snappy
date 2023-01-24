@@ -125,7 +125,7 @@ public class NewImageHandler
                 Id = imageId,
                 AlbumSlug = objectKey.Substring(0, objectKey.LastIndexOf('/')),
                 FileName = Path.GetFileName(objectKey),
-                SavedFiledName = $"{imageId}{Path.GetExtension(objectKey)}",
+                SavedFileName = $"{imageId}{Path.GetExtension(objectKey)}",
                 Title = Path.GetFileName(objectKey), // For now, default to the file name
                 CreatedOn = DateTime.UtcNow, // TODO: Create a service for testing
                 UpdatedOn = DateTime.UtcNow,
@@ -133,7 +133,7 @@ public class NewImageHandler
 
             // Copy the file from the upload bucket
             context.Logger.LogLine("... copying object to storage bucket");
-            var destFileKey = $"{photoRecord.AlbumSlug}/{photoRecord.SavedFiledName}";
+            var destFileKey = $"{photoRecord.AlbumSlug}/{photoRecord.SavedFileName}";
             await _s3Client.CopyObjectAsync(s3event.Bucket.Name, objectKey, _storageBucketName, destFileKey);
 
             context.Logger.LogLine($"... saving photo record ID {photoRecord.Id}");

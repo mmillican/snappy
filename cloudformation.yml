@@ -120,6 +120,7 @@ Resources:
           ignore_checks:
             - I3011
 
+  # TODO: Configure/specify dead letter queue
   NewImageQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -312,31 +313,31 @@ Resources:
                   - s3:PutObject*
                 Resource: !Sub ${StorageBucket.Arn}/*
 
-  # ThumbnailWorker:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     CodeUri:
-  #       Bucket: !Ref CodeDeployBucketName
-  #       Key: !Ref ProcessorDeployKey
-  #     Handler: Snappy.ImageProcessor::Snappy.ImageProcessor.ResizeImageHandler::FunctionHandler
-  #     Role: !GetAtt ThumbnailWorkerRole.Arn
-  #     Runtime: dotnetcore3.1
-  #     MemorySize: 512
-  #     Timeout: 300
-  #     Environment: {}
-  #     Events:
-  #       SNSEvent:
-  #         Type: SNS
-  #         Properties:
-  #           Topic: !Ref ThumbnailWorkerTopic
+  ThumbnailWorker:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeDeployBucketName
+        Key: !Ref ProcessorDeployKey
+      Handler: Snappy.ImageProcessor::Snappy.ImageProcessor.ResizeImageHandler::Handle
+      Role: !GetAtt ThumbnailWorkerRole.Arn
+      Runtime: dotnet6
+      MemorySize: 512
+      Timeout: 300
+      Environment: {}
+      Events:
+        SNSEvent:
+          Type: SNS
+          Properties:
+            Topic: !Ref ThumbnailWorkerTopic
 
-  # ThumbnailWorkerLogGroup:
-  #   Type: AWS::Logs::LogGroup
-  #   Properties:
-  #     LogGroupName: !Sub '/aws/lambda/${ThumbnailWorker}'
-  #     RetentionInDays: !Ref LogRetentionDays
-  #   Metadata:
-  #     cfn-lint:
-  #       config:
-  #         ignore_checks:
-  #           - I3011
+  ThumbnailWorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ThumbnailWorker}'
+      RetentionInDays: !Ref LogRetentionDays
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - I3011

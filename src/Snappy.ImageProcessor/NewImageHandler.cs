@@ -7,6 +7,7 @@ using Amazon.S3.Util;
 using Amazon.SimpleNotificationService;
 using Amazon.SQS;
 using Snappy.ImageProcessor.Models;
+using Snappy.Shared.Images;
 using Snappy.Shared.Models;
 using Snappy.Shared.Services;
 
@@ -47,7 +48,7 @@ public class NewImageHandler
         _s3Client = s3Client;
     }
 
-    public async Task<string> FunctionHandler(SQSEvent evnt, ILambdaContext context)
+    public async Task FunctionHandler(SQSEvent evnt, ILambdaContext context)
     {
         try
         {
@@ -55,8 +56,17 @@ public class NewImageHandler
 
             foreach(var sqsRecord in evnt.Records)
             {
+                context.Logger.LogDebug($"... record message id {sqsRecord.MessageId} / source: {sqsRecord.EventSource}");
+
                 // TODO: Remove me
                 context.Logger.LogLine($"... sqs body: {sqsRecord.Body}");
+
+                if (sqsRecord.Body.Contains("s3:TestEvent"))
+                {
+                    context.Logger.LogLine("Found 'test' event; ignoring!");
+                    continue;
+                }
+
                 var s3Message = JsonSerializer.Deserialize<S3EventNotification_new>(sqsRecord.Body, _jsonSerializerOptions);
                 foreach(var s3Record in s3Message.Records)
                 {
@@ -66,8 +76,6 @@ public class NewImageHandler
                 // Delete the message from the queue
                 await _sqsClient.DeleteMessageAsync(_newImageQueueUri, sqsRecord.ReceiptHandle);
             }
-
-            return "Ok";
         }
         catch(Exception ex)
         {
@@ -83,6 +91,17 @@ public class NewImageHandler
         var s3event = record.S3;
         var objectKey = s3event.Object.Key.Replace("+", " "); // When serialized, spaces become '+'; convert back to space.
         var fqObjectKey = $"s3://{s3event.Bucket.Name}/{objectKey}";
+
+        // TODO: Find a more elegant/scalable way to check this
+        if (!fqObjectKey.EndsWith(".jpg")
+            && !fqObjectKey.EndsWith(".jpeg")
+            && !fqObjectKey.EndsWith(".gif")
+            && !fqObjectKey.EndsWith(".png")
+            && !fqObjectKey.EndsWith(".webp"))
+        {
+            context.Logger.LogLine($"{fqObjectKey} is not an image. Skipping processing.");
+            return;
+        }
 
         try
         {
@@ -103,6 +122,7 @@ public class NewImageHandler
 
             var photoRecord = new Photo
             {
+                Id = imageId,
                 AlbumSlug = objectKey.Substring(0, objectKey.LastIndexOf('/')),
                 FileName = Path.GetFileName(objectKey),
                 SavedFiledName = $"{imageId}{Path.GetExtension(objectKey)}",
@@ -116,10 +136,10 @@ public class NewImageHandler
             var destFileKey = $"{photoRecord.AlbumSlug}/{photoRecord.SavedFiledName}";
             await _s3Client.CopyObjectAsync(s3event.Bucket.Name, objectKey, _storageBucketName, destFileKey);
 
-            context.Logger.LogLine("... saving photo record");
+            context.Logger.LogLine($"... saving photo record ID {photoRecord.Id}");
             await _photoService.Save(photoRecord);
 
-            // TODO: Submit resize requests
+            await SubmitResizeRequest(_storageBucketName, destFileKey);
 
             context.Logger.LogLine("... creating album record if it doesn't exist");
             await _albumService.CreateAlbumIfNotExists(photoRecord.AlbumSlug);
@@ -135,5 +155,18 @@ public class NewImageHandler
             context.Logger.LogError(ex.StackTrace);
             throw;
         }
+    }
+
+    private async Task SubmitResizeRequest(string bucketName, string objectKey)
+    {
+        var request = new ResizeImageRequest
+        {
+            BucketName = bucketName,
+            ObjectKey = objectKey,
+            Sizes = ImageHelper.GetImageSizes().ToList(),
+        };
+
+        var requestBody = JsonSerializer.Serialize(request, _jsonSerializerOptions);
+        await _snsClient.PublishAsync(_thumbnailWorkerTopicArn, requestBody);
     }
 }

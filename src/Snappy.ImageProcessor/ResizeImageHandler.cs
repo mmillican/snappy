@@ -49,16 +49,13 @@ public class ResizeImageHandler
 
             var imageContentType = objectResponse.Headers.ContentType;
 
-            IImageFormat imageformat;
-            using var image = Image.Load(objectResponse.ResponseStream, out imageformat);
+            using var image = Image.Load(objectResponse.ResponseStream, out IImageFormat imageFormat);
 
             foreach(var size in request.Sizes)
             {
                 context.Logger.LogLine($"... resizing image to '{size.Key}'");
 
                 var resizedFileKey = ImageHelper.GetResizedFileName(request.ObjectKey, size.Key);
-
-                using var outStream = new MemoryStream();
 
                 var resizeOptions = new ResizeOptions();
 
@@ -78,9 +75,11 @@ public class ResizeImageHandler
                     resizeOptions.Size = new Size(size.Height, size.Width);
                 }
 
-                image.Mutate(x => x.Resize(resizeOptions));
+                using var outStream = new MemoryStream();
 
-                image.Save(outStream, imageformat);
+                var clone = image.Clone(x => x.Resize(resizeOptions));
+
+                clone.Save(outStream, imageFormat);
 
                 var putResizedObjectRequest = new PutObjectRequest
                 {

@@ -67,7 +67,7 @@ public class NewImageHandler
                     continue;
                 }
 
-                var s3Message = JsonSerializer.Deserialize<S3EventNotification_new>(sqsRecord.Body, _jsonSerializerOptions);
+                var s3Message = JsonSerializer.Deserialize<Models.S3EventNotification>(sqsRecord.Body, _jsonSerializerOptions);
                 foreach(var s3Record in s3Message.Records)
                 {
                     await ProcessS3Record(s3Record, context);
@@ -84,7 +84,7 @@ public class NewImageHandler
         }
     }
 
-    public async Task ProcessS3Record(S3EventNotification_new.S3EventNotificationRecord record, ILambdaContext context)
+    public async Task ProcessS3Record(Models.S3EventNotification.S3EventNotificationRecord record, ILambdaContext context)
     {
         // TODO: metadata
 

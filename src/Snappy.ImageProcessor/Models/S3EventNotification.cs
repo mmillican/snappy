@@ -5,8 +5,7 @@ namespace Snappy.ImageProcessor.Models;
 /// <summary>
 /// This is basically a copy of the models from the S3 library, but modified for [de]serialization
 /// </summary>
-[Obsolete("change name")]
-public class S3EventNotification_new
+public class S3EventNotification
 {
     [JsonPropertyName("Records")]
     public List<S3EventNotificationRecord> Records { get; set; }

@@ -3,10 +3,9 @@ using System.Text.Json;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.SQSEvents;
 using Amazon.S3;
-using Amazon.S3.Util;
 using Amazon.SimpleNotificationService;
 using Amazon.SQS;
-using Snappy.ImageProcessor.Models;
+using SixLabors.ImageSharp;
 using Snappy.Shared.Images;
 using Snappy.Shared.Models;
 using Snappy.Shared.Services;
@@ -143,10 +142,11 @@ public class NewImageHandler
             context.Logger.LogLine("... creating album record if it doesn't exist");
             await _albumService.CreateAlbumIfNotExists(photoRecord.AlbumSlug);
 
-            // TODO: Process metadata
-
             // Delete the original
             await _s3Client.DeleteObjectAsync(s3event.Bucket.Name, objectKey);
+            context.Logger.LogDebug($"... deleting file from upload bucket");
+
+            await ParsePhotoMetadata(destFileKey, photoRecord, context);
         }
         catch(Exception ex)
         {
@@ -167,5 +167,53 @@ public class NewImageHandler
 
         var requestBody = JsonSerializer.Serialize(request, _jsonSerializerOptions);
         await _snsClient.PublishAsync(_thumbnailWorkerTopicArn, requestBody);
+    }
+
+    private async Task ParsePhotoMetadata(string objectKey, Photo photoRecord, ILambdaContext context)
+    {
+        try
+        {
+            context.Logger.LogInformation("... processing photo metadata");
+
+            using var objectResponse = await _s3Client.GetObjectAsync(_storageBucketName, objectKey);
+
+            context.Logger.LogDebug("... retrieved object from bucket");
+
+            using var image = Image.Load(objectResponse.ResponseStream);
+
+            var exif = image.Metadata.ExifProfile;
+            if (exif is null)
+            {
+                context.Logger.LogError($"... Could not load EXIF data for '{photoRecord.Id}'");
+                return;
+            }
+
+            // TODO: Other properties we might be interested in?
+            // TODO: Map Orientation to enum / descriptive value
+            // TODO: Reformat DateTime
+            var interestedExifTags = new[]
+            {
+                "Orientation", "Make", "Model", "Software", "DateTime", "ExposureTime", "FNumber", "ApertureValue",
+                "LensMake", "LensModel",
+            };
+
+            foreach(var tv in exif.Values.Where(x => interestedExifTags.Contains(x.Tag.ToString()) && x.GetValue() != null))
+            {
+                if (!photoRecord.Metadata.ContainsKey(tv.Tag.ToString()))
+                {
+                    photoRecord.Metadata.Add(tv.Tag.ToString(), tv.GetValue().ToString());
+                }
+            }
+
+            context.Logger.LogDebug($"... saved {photoRecord.Metadata.Keys.Count} metadata properties");
+
+            await _photoService.Save(photoRecord);
+
+            context.Logger.LogInformation("... saved photo metadata");
+        }
+        catch(Exception ex)
+        {
+            context.Logger.LogError($"... error parsing photo metadata. Error: {ex.Message}");
+        }
     }
 }

@@ -92,17 +92,16 @@ public class NewImageHandler
         var objectKey = s3event.Object.Key.Replace("+", " "); // When serialized, spaces become '+'; convert back to space.
         var fqObjectKey = $"s3://{s3event.Bucket.Name}/{objectKey}";
 
-        // TODO: Find a more elegant/scalable way to check this
-        if (!fqObjectKey.EndsWith(".jpg")
-            && !fqObjectKey.EndsWith(".jpeg")
-            && !fqObjectKey.EndsWith(".gif")
-            && !fqObjectKey.EndsWith(".png")
-            && !fqObjectKey.EndsWith(".webp"))
+        // TODO: Use content/mime type to check instead
+        var fileExtension = Path.GetExtension(objectKey).ToLower();
+        var allowedImageExtensions = new[] { ".jpg", ".jpeg", ".gif", ".png", ".webp"};
+        if (!allowedImageExtensions.Contains(fileExtension))
         {
             context.Logger.LogLine($"{fqObjectKey} is not an image. Skipping processing.");
             return;
         }
 
+        // TODO: Handle file names with special characters/spaces
         try
         {
             var getObjectResponse = await _s3Client.GetObjectAsync(s3event.Bucket.Name, objectKey);
@@ -125,8 +124,8 @@ public class NewImageHandler
                 Id = imageId,
                 AlbumSlug = objectKey.Substring(0, objectKey.LastIndexOf('/')),
                 FileName = Path.GetFileName(objectKey),
-                SavedFileName = $"{imageId}{Path.GetExtension(objectKey)}",
-                Title = Path.GetFileName(objectKey), // For now, default to the file name
+                SavedFileName = $"{imageId}{Path.GetExtension(objectKey)}".ToLower(),
+                Title = Path.GetFileNameWithoutExtension(objectKey), // For now, default to the file name
                 CreatedOn = DateTime.UtcNow, // TODO: Create a service for testing
                 UpdatedOn = DateTime.UtcNow,
             };

@@ -33,8 +33,8 @@ public class NewImageHandler
         _s3Client = new AmazonS3Client();
         _sqsClient = new AmazonSQSClient();
         _snsClient = new AmazonSimpleNotificationServiceClient();
-        _albumService = new AlbumService(AWSEnvironment.DynamoTables.AlbumTableName);
-        _photoService = new PhotoService(AWSEnvironment.DynamoTables.PhotoTableName);
+        _albumService = new AlbumService();
+        _photoService = new PhotoService();
     }
 
     public NewImageHandler(IAmazonS3 s3Client) : this()

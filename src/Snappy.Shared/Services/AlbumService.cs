@@ -1,9 +1,15 @@
+using Snappy.Shared.Config;
 using Snappy.Shared.Models;
 
 namespace Snappy.Shared.Services;
 
 public class AlbumService : BaseDynamoService<Album>
 {
+    public AlbumService()
+        : base(AWSEnvironment.DynamoTables.AlbumTableName)
+    {
+    }
+
     public AlbumService(string tableName) : base(tableName)
     {
     }

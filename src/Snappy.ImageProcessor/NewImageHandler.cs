@@ -6,6 +6,7 @@ using Amazon.S3;
 using Amazon.SimpleNotificationService;
 using Amazon.SQS;
 using SixLabors.ImageSharp;
+using Snappy.Shared.Config;
 using Snappy.Shared.Images;
 using Snappy.Shared.Models;
 using Snappy.Shared.Services;
@@ -16,12 +17,6 @@ namespace Snappy.ImageProcessor;
 
 public class NewImageHandler
 {
-    private readonly string _storageBucketName = Environment.GetEnvironmentVariable("StorageBucketName");
-    private readonly string _newImageQueueUri = Environment.GetEnvironmentVariable("NewImageQueueUrl");
-    private readonly string _thumbnailWorkerTopicArn = Environment.GetEnvironmentVariable("ThumbnailWorkerTopicArn");
-    private readonly string _albumTableName = Environment.GetEnvironmentVariable("AlbumTableName");
-    private readonly string _photoTableName = Environment.GetEnvironmentVariable("PhotoTableName");
-
     private readonly IAmazonS3 _s3Client;
     private readonly IAmazonSQS _sqsClient;
     private readonly IAmazonSimpleNotificationService _snsClient;
@@ -38,8 +33,8 @@ public class NewImageHandler
         _s3Client = new AmazonS3Client();
         _sqsClient = new AmazonSQSClient();
         _snsClient = new AmazonSimpleNotificationServiceClient();
-        _albumService = new AlbumService(_albumTableName);
-        _photoService = new PhotoService(_photoTableName);
+        _albumService = new AlbumService(AWSEnvironment.DynamoTables.AlbumTableName);
+        _photoService = new PhotoService(AWSEnvironment.DynamoTables.PhotoTableName);
     }
 
     public NewImageHandler(IAmazonS3 s3Client) : this()
@@ -73,7 +68,7 @@ public class NewImageHandler
                 }
 
                 // Delete the message from the queue
-                await _sqsClient.DeleteMessageAsync(_newImageQueueUri, sqsRecord.ReceiptHandle);
+                await _sqsClient.DeleteMessageAsync(AWSEnvironment.Queues.NewImageQueueUri, sqsRecord.ReceiptHandle);
             }
         }
         catch(Exception ex)
@@ -132,12 +127,12 @@ public class NewImageHandler
             // Copy the file from the upload bucket
             context.Logger.LogLine("... copying object to storage bucket");
             var destFileKey = $"{photoRecord.AlbumSlug}/{photoRecord.SavedFileName}";
-            await _s3Client.CopyObjectAsync(s3event.Bucket.Name, objectKey, _storageBucketName, destFileKey);
+            await _s3Client.CopyObjectAsync(s3event.Bucket.Name, objectKey, AWSEnvironment.S3Buckets.StorageBucketName, destFileKey);
 
             context.Logger.LogLine($"... saving photo record ID {photoRecord.Id}");
             await _photoService.Save(photoRecord);
 
-            await SubmitResizeRequest(_storageBucketName, destFileKey);
+            await SubmitResizeRequest(AWSEnvironment.S3Buckets.StorageBucketName, destFileKey);
 
             context.Logger.LogLine("... creating album record if it doesn't exist");
             await _albumService.CreateAlbumIfNotExists(photoRecord.AlbumSlug);
@@ -166,7 +161,7 @@ public class NewImageHandler
         };
 
         var requestBody = JsonSerializer.Serialize(request, _jsonSerializerOptions);
-        await _snsClient.PublishAsync(_thumbnailWorkerTopicArn, requestBody);
+        await _snsClient.PublishAsync(AWSEnvironment.SnsTopics.ThumbnailWorkerTopicArn, requestBody);
     }
 
     private async Task ParsePhotoMetadata(string objectKey, Photo photoRecord, ILambdaContext context)
@@ -175,7 +170,7 @@ public class NewImageHandler
         {
             context.Logger.LogInformation("... processing photo metadata");
 
-            using var objectResponse = await _s3Client.GetObjectAsync(_storageBucketName, objectKey);
+            using var objectResponse = await _s3Client.GetObjectAsync(AWSEnvironment.S3Buckets.StorageBucketName, objectKey);
 
             context.Logger.LogDebug("... retrieved object from bucket");
 

@@ -3,7 +3,16 @@ using Snappy.Shared.Models;
 
 namespace Snappy.Shared.Services;
 
-public class AlbumService : BaseDynamoService<Album>
+public interface IAlbumService
+{
+    Task<Album> FindAlbum(string slug);
+
+    Task<IEnumerable<Album>> GetAlbums();
+
+    Task Save(Album album);
+}
+
+public class AlbumService : BaseDynamoService<Album>, IAlbumService
 {
     public AlbumService()
         : base(AWSEnvironment.DynamoTables.AlbumTableName)

@@ -104,11 +104,15 @@ Resources:
     Properties:
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
+        - AttributeName: AlbumSlug
+          AttributeType: S
         - AttributeName: Id
           AttributeType: S
       KeySchema:
-        - AttributeName: Id
+        - AttributeName: AlbumSlug
           KeyType: HASH
+        - AttributeName: Id
+          KeyType: RANGE
       Tags:
         - Key: Platform
           Value: Snappy

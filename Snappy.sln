@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Snappy.Shared", "src\Snappy
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Snappy.ImageProcessor", "src\Snappy.ImageProcessor\Snappy.ImageProcessor.csproj", "{D59AAB01-69DD-4646-A6D3-66830ED35A13}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Snappy.Api", "src\Snappy.Api\Snappy.Api.csproj", "{4A6471B8-CA25-4A55-88CD-FD4151BD8EA2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,9 +28,14 @@ Global
 		{D59AAB01-69DD-4646-A6D3-66830ED35A13}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D59AAB01-69DD-4646-A6D3-66830ED35A13}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D59AAB01-69DD-4646-A6D3-66830ED35A13}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4A6471B8-CA25-4A55-88CD-FD4151BD8EA2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4A6471B8-CA25-4A55-88CD-FD4151BD8EA2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4A6471B8-CA25-4A55-88CD-FD4151BD8EA2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4A6471B8-CA25-4A55-88CD-FD4151BD8EA2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{C1281641-3E44-4E64-BF8D-0A4D7A46F9F7} = {BB1E4175-0BFE-4A0D-B3AC-42864F2BC159}
 		{D59AAB01-69DD-4646-A6D3-66830ED35A13} = {BB1E4175-0BFE-4A0D-B3AC-42864F2BC159}
+		{4A6471B8-CA25-4A55-88CD-FD4151BD8EA2} = {BB1E4175-0BFE-4A0D-B3AC-42864F2BC159}
 	EndGlobalSection
 EndGlobal

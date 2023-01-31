@@ -39,6 +39,10 @@ Outputs:
   PhotoTableName:
     Value: !Ref PhotoTable
 
+  ApiUrl:
+    Value: !Sub https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/
+    Description: Base URL of the API Gateway
+
   # TODO: API/Cloudfront URLs
   # TODO: Congito
 
@@ -339,6 +343,115 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ThumbnailWorker}'
+      RetentionInDays: !Ref LogRetentionDays
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - I3011
+
+  ApiProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: logs
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource: arn:aws:logs:*:*:* # TODO restrict
+
+        - PolicyName: dynamo
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:Batch*'
+                  - 'dynamodb:DeleteItem'
+                  - 'dynamodb:DescribeTable'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                  - 'dynamodb:UpdateItem'
+                Resource:
+                  - !Sub ${AlbumTable.Arn}
+                  - !Sub ${PhotoTable.Arn}
+
+  ServerlessApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        # AllowOrigins:
+        #   - !Sub 'https://${S3WebsiteStack.Outputs.CloudfrontEndpoint}'
+        #   - !Sub 'https://${S3WebsiteStack.Outputs.FullDomain}'
+        AllowHeaders:
+          - '*'
+        AllowMethods:
+          - DELETE
+          - GET
+          - OPTIONS
+          - POST
+          - PUT
+        ExposeHeaders:
+          - '*'
+        MaxAge: 600
+        AllowCredentials: True
+
+  ApiProxyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: dotnet6
+      # Handler: Snappy.Api::Snappy.Api.LambdaEntryPoint::FunctionHandlerAsync
+      Handler: Snappy.Api
+      CodeUri:
+        Bucket: !Ref CodeDeployBucketName
+        Key: !Ref ApiDeployKey
+      MemorySize: 256
+      Timeout: 30
+      Role: !GetAtt ApiProxyRole.Arn
+      Environment:
+        Variables:
+          AWS__StorageBucketName: !Ref StorageBucket
+          AWS__AlbumTableName: !Ref AlbumTable
+          AWS__PhotoTableName: !Ref PhotoTable
+          # AWS__CollectionTableName: !Ref CollectionTable
+          # AWS__CloudfrontEndpoint: !Sub 'https://${S3WebsiteStack.Outputs.CloudfrontEndpoint}'
+          # AWS__FrontendUrl: !Sub 'https://${S3WebsiteStack.Outputs.FullDomain}'
+          # AWS__CognitoUrl: !If
+          #   - ShouldCreateUserPool
+          #   - !Sub https://cognito-idp.us-east-1.amazonaws.com/${UserPool}
+          #   - !Sub https://cognito-idp.us-east-1.amazonaws.com/${UserPoolId}
+          # AWS__CognitoApiClientId: !Ref UserPoolApiClient
+          # AWS__ThumbnailWorkerTopicArn: !Ref ThumbnailWorkerTopic
+      Events:
+        ProxyResource:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ServerlessApi
+            Path: '/{proxy+}'
+            Method: ANY
+        RootResource:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ServerlessApi
+            Path: '/'
+            Method: ANY
+
+  ApiProxyFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ApiProxyFunction}'
       RetentionInDays: !Ref LogRetentionDays
     Metadata:
       cfn-lint:

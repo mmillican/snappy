@@ -70,17 +70,17 @@ Resources:
           Value: Media storage
 
   # TODO: Use pre-signed URLs?
-  StorageBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref StorageBucket
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal: '*'
-            Action:
-              - s3:GetObject
-            Resource: !Sub 'arn:${AWS::Partition}:s3:::${StorageBucket}/*'
+  # StorageBucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref StorageBucket
+  #     PolicyDocument:
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal: '*'
+  #           Action:
+  #             - s3:GetObject
+  #           Resource: !Sub 'arn:${AWS::Partition}:s3:::${StorageBucket}/*'
 
   AlbumTable:
     Type: AWS::DynamoDB::Table

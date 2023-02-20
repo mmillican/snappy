@@ -1,3 +1,4 @@
+using Amazon.S3;
 using Snappy.Shared.Config;
 using Snappy.Shared.Services;
 
@@ -8,8 +9,11 @@ builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
 builder.Services.Configure<AwsConfig>(builder.Configuration.GetSection("AWS"));
 
+builder.Services.AddAWSService<IAmazonS3>();
+
 builder.Services.AddTransient<IAlbumService>(_ => new AlbumService(builder.Configuration["AWS:AlbumTableName"]));
 builder.Services.AddTransient<IPhotoService>(_ => new PhotoService(builder.Configuration["AWS:PhotoTableName"]));
+builder.Services.AddTransient<IStorageProvider, AmazonS3StorageProvider>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

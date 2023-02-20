@@ -12,12 +12,15 @@ namespace Snappy.Api.Controllers;
 public class PhotosController : ControllerBase
 {
     private readonly IPhotoService _photoService;
+    private readonly IStorageProvider _storageProvider;
     private readonly AwsConfig _awsConfig;
 
     public PhotosController(IPhotoService photoService,
+        IStorageProvider storageProvider,
         IOptions<AwsConfig> awsOptions)
     {
         _photoService = photoService;
+        _storageProvider = storageProvider;
         _awsConfig = awsOptions.Value;
     }
 
@@ -61,8 +64,8 @@ public class PhotosController : ControllerBase
     private string ResolveImageUrl(string album, string filename, string? sizeKey = null)
     {
         filename = ImageHelper.GetResizedFileName(filename, sizeKey);
-
-        return $"https://{_awsConfig.StorageBucketName}.s3.amazonaws.com/{album}/{filename}";
+        var path = $"{album}/{filename}";
+        return _storageProvider.ResolveFileUrl(path);
     }
 
     public class PhotoModel : Photo

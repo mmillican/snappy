@@ -29,7 +29,11 @@ public class AmazonS3StorageProvider : IStorageProvider
             path = path.Substring(1);
         }
 
-        if (_awsConfig.PreSignGetUrls)
+        if (_awsConfig.HasCloudFrontDomain)
+        {
+            return $"{_awsConfig.CloudFrontDomain}/{path}";
+        }
+        else if (_awsConfig.PreSignGetUrls)
         {
             var presignRequest = new GetPreSignedUrlRequest
             {

@@ -9,4 +9,7 @@ public class AwsConfig
 	/// </summary>
 	/// <value></value>
     public int PreSignGetUrlsDuration { get; set; }
+
+    public string CloudFrontDomain { get; set; }
+    public bool HasCloudFrontDomain => !string.IsNullOrEmpty(CloudFrontDomain);
 }

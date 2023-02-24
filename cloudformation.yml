@@ -23,8 +23,18 @@ Parameters:
     Description: The number of days to retain logs. Defaults to 14.
     Default: 14
 
+  UseCloudFront:
+    Type: String
+    Description: Whether or not to use CloudFront for the content bucket and web app
+    AllowedValues: [ 'true', 'false' ]
+    Default: 'true'
+
   # TODO: Cognito User Pool params
   # TODO: Website/frontend params
+
+Conditions:
+  ShouldCreateCloudFrontDistribution:
+    !Equals [ !Ref UseCloudFront, 'true' ]
 
 Outputs:
   UploadBucketName:
@@ -47,6 +57,12 @@ Outputs:
   # TODO: Congito
 
 Resources:
+  OriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: "snappy storage bucket OAI"
+
   UploadBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -69,18 +85,67 @@ Resources:
         - Key: Purpose
           Value: Media storage
 
-  # TODO: Use pre-signed URLs?
-  # StorageBucketPolicy:
-  #   Type: AWS::S3::BucketPolicy
-  #   Properties:
-  #     Bucket: !Ref StorageBucket
-  #     PolicyDocument:
-  #       Statement:
-  #         - Effect: Allow
-  #           Principal: '*'
-  #           Action:
-  #             - s3:GetObject
-  #           Resource: !Sub 'arn:${AWS::Partition}:s3:::${StorageBucket}/*'
+  StorageBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StorageBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt OriginAccessIdentity.S3CanonicalUserId
+            Action:
+              - s3:GetObject
+            Resource: !Sub 'arn:${AWS::Partition}:s3:::${StorageBucket}/*'
+
+            # TODO: Remove this when the CF restriction is figured out
+          # - Effect: Allow
+          #   Principal: '*'
+          #   Action:
+          #     - s3:GetObject
+          #   Resource: !Sub 'arn:${AWS::Partition}:s3:::${StorageBucket}/*'
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Condition: ShouldCreateCloudFrontDistribution
+    Properties:
+      DistributionConfig:
+        Enabled: 'true'
+        CacheBehaviors:
+          - PathPattern: '/media/'
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6' # Id for CachingOptimized
+            TargetOriginId: StorageBucketOrigin
+            ForwardedValues:
+              QueryString: 'false'
+              Cookies:
+                Forward: none
+            ViewerProtocolPolicy: redirect-to-https
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          # See https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html for CachePolicyId details
+          CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6' # Id for CachingOptimized
+          TargetOriginId: StorageBucketOrigin
+          ForwardedValues:
+            QueryString: 'false'
+            Cookies:
+              Forward: none
+          ViewerProtocolPolicy: redirect-to-https
+        Origins:
+          - Id: StorageBucketOrigin
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${OriginAccessIdentity.Id}' # TODO: Should probably restrict access to s3 bucket
+            DomainName: !GetAtt StorageBucket.DomainName
+
+      Tags:
+        - Key: Platform
+          Value: Snappy
 
   AlbumTable:
     Type: AWS::DynamoDB::Table

@@ -11,6 +11,7 @@ trim_trailing_whitespace                                                  = true
 
 [*.{yaml,yml,template}]
 indent_size = 2
+end_of_line = lf
 
 [*.cshtml]
 indent_size = 4

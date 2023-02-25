@@ -67,8 +67,6 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       Tags:
-        - Key: Platform
-          Value: Snappy
         - Key: Purpose
           Value: Temporary storage for uploads
       NotificationConfiguration:
@@ -80,8 +78,6 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       Tags:
-        - Key: Platform
-          Value: Snappy
         - Key: Purpose
           Value: Media storage
 
@@ -143,10 +139,6 @@ Resources:
               OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${OriginAccessIdentity.Id}' # TODO: Should probably restrict access to s3 bucket
             DomainName: !GetAtt StorageBucket.DomainName
 
-      Tags:
-        - Key: Platform
-          Value: Snappy
-
   AlbumTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -158,15 +150,13 @@ Resources:
         - AttributeName: Slug
           KeyType: HASH
       Tags:
-        - Key: Platform
-          Value: Snappy
         - Key: Purpose
           Value: Data storage
     Metadata:
       cfn-lint:
         config:
           ignore_checks:
-            - I3011
+            - I3011 # Ignore update/delete policy warnings
 
   PhotoTable:
     Type: AWS::DynamoDB::Table
@@ -183,15 +173,13 @@ Resources:
         - AttributeName: Id
           KeyType: RANGE
       Tags:
-        - Key: Platform
-          Value: Snappy
         - Key: Purpose
           Value: Data storage
     Metadata:
       cfn-lint:
         config:
           ignore_checks:
-            - I3011
+            - I3011 # Ignore update/delete policy warnings
 
   # TODO: Configure/specify dead letter queue
   NewImageQueue:
@@ -202,8 +190,8 @@ Resources:
       cfn-lint:
         config:
           ignore_checks:
-            - I3011
-            - I3013
+            - I3011 # Ignore update/delete policy warnings
+            - I3013 # Ignore explicit retention policy
 
   NewImageQueuePolicy:
     Type: AWS::SQS::QueuePolicy
@@ -295,7 +283,6 @@ Resources:
                   - 'dynamodb:Query'
                   - 'dynamodb:Scan'
                   - 'dynamodb:UpdateItem'
-                  - 'dynamodb:UpdateTable' # Not sure about this?
                 Resource:
                   - !Sub ${AlbumTable.Arn}
                   - !Sub ${PhotoTable.Arn}
@@ -316,7 +303,7 @@ Resources:
       cfn-lint:
         config:
           ignore_checks:
-            - I3011
+            - I3011 # Ignore update/delete policy warnings
 
   ImageProcessor:
     Type: AWS::Serverless::Function
@@ -413,7 +400,7 @@ Resources:
       cfn-lint:
         config:
           ignore_checks:
-            - I3011
+            - I3011 # Ignore update/delete policy warnings
 
   ApiProxyRole:
     Type: AWS::IAM::Role
@@ -522,4 +509,4 @@ Resources:
       cfn-lint:
         config:
           ignore_checks:
-            - I3011
+            - I3011 # Ignore update/delete policy warnings
